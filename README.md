@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="passtheremote.png" alt="Pass the Remote" width="180" />
+</p>
+
 # Pass the Remote
 
 A tiny self-hosted music server — a **companion app to
