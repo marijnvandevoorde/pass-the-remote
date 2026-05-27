@@ -1,0 +1,9 @@
+node_modules/
+.env
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+music/
+data/
+docker-compose.override.yml

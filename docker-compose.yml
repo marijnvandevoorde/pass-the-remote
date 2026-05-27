@@ -1,0 +1,35 @@
+# Pass the Remote — a companion app to Pass the Aux.
+#
+# Spin up a self-hosted music server that any Pass the Aux instance can
+# add as a remote record store. Minimal config: copy .env.example to
+# .env, set REMOTE_SECRET, point MUSIC_HOST_DIR at your music folder,
+# run `docker compose up -d`.
+#
+# On the Pass the Aux side, add this as a remote record store with:
+#   base URL: http://<this-host>:<PORT>
+#   secret:   <same REMOTE_SECRET>
+
+services:
+  pass-the-remote:
+    build: .
+    image: pass-the-remote
+    container_name: pass-the-remote
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      # Container-internal — leave these alone; volume mounts below
+      # map them to host paths.
+      - HOST=0.0.0.0
+      - PORT=3000
+      - MUSIC_DIR=/music
+      - DB_PATH=/data/library.db
+      # Required. Pass the Aux clients send `Authorization: Bearer <REMOTE_SECRET>`.
+      - REMOTE_SECRET=${REMOTE_SECRET:?REMOTE_SECRET is required — set it in .env}
+      - SCAN_INTERVAL_S=${SCAN_INTERVAL_S:-300}
+    volumes:
+      # Your music folder, mounted read-only. Override via MUSIC_HOST_DIR.
+      - ${MUSIC_HOST_DIR:-./music}:/music:ro
+      # SQLite index. Bind-mount so it survives container recreation
+      # and stays inspectable from the host.
+      - ./data:/data
+    restart: unless-stopped
