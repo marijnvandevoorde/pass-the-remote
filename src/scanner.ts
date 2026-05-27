@@ -74,7 +74,7 @@ async function* walk(dir: string): AsyncGenerator<string> {
     return;
   }
   for (const e of entries) {
-    if (e.name.startsWith(".")) continue; // hidden / sidecar files
+    if (e.name.startsWith(".")) continue; // hidden
     const full = path.join(dir, e.name);
     if (e.isDirectory()) {
       yield* walk(full);
