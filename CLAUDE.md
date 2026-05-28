@@ -21,6 +21,10 @@ user has configured.
 - **`node:sqlite`** (built-in, stable in Node 24) for the index
 - **Native `http`** for serving — no framework
 - **Zero npm runtime dependencies.** Tooling-only devDeps (TypeScript).
+- **`ffprobe`** (system binary, ships with ffmpeg in the Docker image) —
+  read by `src/tags.ts` to extract title/artist/album/duration from
+  every audio container at scan time. Absent ffprobe ⇒ the scanner
+  falls back to filename heuristics gracefully (no crash).
 
 ## Commands
 

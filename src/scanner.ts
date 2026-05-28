@@ -3,6 +3,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { AUDIO_EXTS } from "./mime.ts";
 import { Db } from "./db.ts";
+import { readTags } from "./tags.ts";
 
 const EXTS = new Set(AUDIO_EXTS.map((e) => `.${e}`));
 
@@ -39,15 +40,19 @@ export class Scanner {
           if (!stat.isFile()) continue;
           const id = crypto.createHash("md5").update(file).digest("hex");
           const rel = path.relative(this.#root, file);
-          const parsed = parseFilename(rel);
+          // Real tags first (ID3 / Vorbis / MP4 / etc. via ffprobe),
+          // falling back to the filename/path heuristic field-by-field
+          // so a tagged title still beats a folder-derived artist.
+          const tags = await readTags(file);
+          const fallback = parseFilename(rel);
           this.#db.upsert({
             id,
             abs_path: file,
             rel_path: rel,
-            title: parsed.title,
-            artist: parsed.artist,
-            album: parsed.album,
-            duration_sec: 0,
+            title: tags?.title ?? fallback.title,
+            artist: tags?.artist ?? fallback.artist,
+            album: tags?.album ?? fallback.album,
+            duration_sec: tags?.durationSec ?? 0,
             size_bytes: stat.size,
             ext: path.extname(file).slice(1).toLowerCase(),
             indexed_at: startedAt,
