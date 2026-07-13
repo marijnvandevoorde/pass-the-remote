@@ -8,7 +8,7 @@
 # manual review and is not auto-merged.
 version: 2
 updates:
-  # JavaScript / Node.js dependencies (package.json at the repo root).
+  # JavaScript / Node.js dependencies (package.json + package-lock.json at the repo root).
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
@@ -16,6 +16,35 @@ updates:
     open-pull-requests-limit: 10
     groups:
       npm-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # Base images in Dockerfile and docker-compose.yml at the repo root.
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    groups:
+      docker-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # Actions used by the workflows in .github/workflows/.
+  # Grouped too: action minor/patch bumps are routine and should land on their own.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    groups:
+      actions-minor-patch:
         patterns:
           - "*"
         update-types:
