@@ -1,0 +1,46 @@
+name: CI
+
+# Cheap checks so Dependabot updates get tested before they auto-merge:
+# npm ci + typecheck, then boot the server on an empty music folder and check
+# /api/health and an authenticated search. The docker image is not built here:
+# that stays manual (docker-publish.yml).
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      # Same major as the Dockerfile's node image.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+
+      - run: npm ci --no-audit --no-fund
+
+      - run: npm run typecheck
+
+      - name: Boot smoke test
+        env:
+          REMOTE_SECRET: ci
+          HOST: 127.0.0.1
+          PORT: "3000"
+        run: |
+          mkdir -p "$RUNNER_TEMP/music"
+          MUSIC_DIR="$RUNNER_TEMP/music" DB_PATH="$RUNNER_TEMP/library.db" node src/server.ts &
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:3000/api/health && break; sleep 1; done
+          curl -fsS http://127.0.0.1:3000/api/health
+          curl -fsS -H "Authorization: Bearer ci" "http://127.0.0.1:3000/api/get-music?q=x"
+          kill %1
