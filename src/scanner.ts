@@ -4,6 +4,7 @@ import { AUDIO_EXTS } from "./mime.ts";
 import { Db, legacyIdFor, trackIdFor } from "./db.ts";
 import { readTags } from "./tags.ts";
 import { searchText } from "./normalize.ts";
+import { pickCoverFile } from "./covers.ts";
 
 const EXTS = new Set(AUDIO_EXTS.map((e) => `.${e}`));
 
@@ -90,6 +91,18 @@ export class Scanner {
         return { seen: 0, probed: 0, removed: 0 };
       }
       const known = this.#db.fileStates();
+      // Folder listings for cover lookup, one readdir per folder per scan.
+      const listings = new Map<string, string[]>();
+      const coverFor = async (file: string): Promise<string | null> => {
+        const dir = path.dirname(file);
+        let entries = listings.get(dir);
+        if (entries === undefined) {
+          entries = await fs.readdir(dir).catch(() => [] as string[]);
+          listings.set(dir, entries);
+        }
+        const name = pickCoverFile(path.basename(file), entries);
+        return name === null ? null : path.relative(this.#root, path.join(dir, name));
+      };
       const unreadable: string[] = [];
       for await (const file of walk(this.#root, unreadable)) {
         if (!EXTS.has(path.extname(file).toLowerCase())) continue;
@@ -101,13 +114,14 @@ export class Scanner {
           const id = trackIdFor(rel);
           const mtime = Math.floor(stat.mtimeMs);
           const prev = known.get(id);
+          const coverPath = await coverFor(file);
           if (
             prev !== undefined &&
             prev.mtime_ms === mtime &&
             prev.size_bytes === stat.size &&
             prev.search_text !== null
           ) {
-            this.#db.touch(prev.id, startedAt, file);
+            this.#db.touch(prev.id, startedAt, file, coverPath);
             seen++;
             continue;
           }
@@ -133,6 +147,8 @@ export class Scanner {
             ext: path.extname(file).slice(1).toLowerCase(),
             indexed_at: startedAt,
             mtime_ms: mtime,
+            cover_path: coverPath,
+            embedded_art: tags?.embeddedArt === true ? 1 : 0,
             search_text: searchText({
               title,
               artist,

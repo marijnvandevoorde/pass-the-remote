@@ -15,6 +15,10 @@ import { parseRange } from "../src/routes.ts";
 import type { Config } from "../src/config.ts";
 
 const SECRET = "s3cret-for-tests";
+const PNG_1PX = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+  "base64",
+);
 let tmp: string;
 let base: string;
 let app: ReturnType<typeof createApp>;
@@ -33,6 +37,8 @@ before(async () => {
   put("Guns N' Roses - Sweet Child O' Mine.mp3");
   put("Halo Collective - Something Else.mp3");
   put("Various - Halo (Remix).mp3", 5000);
+  // A folder picture for the AC-DC album (a valid 1x1 PNG).
+  fs.writeFileSync(path.join(tmp, "music", "AC-DC", "Back in Black", "Cover.PNG"), PNG_1PX);
   // A symlinked folder (e.g. a second disk linked into the library).
   fs.mkdirSync(path.join(tmp, "elsewhere"));
   fs.writeFileSync(path.join(tmp, "elsewhere", "Linked Artist - Linked Song.mp3"), "x");
@@ -295,4 +301,36 @@ test("track ids survive moving the music folder", async () => {
   assert.equal(b.db.getById(id)?.abs_path, path.join(after, "Artist", "Artist - Song.mp3"));
   b.db.close();
   fs.rmSync(root, { recursive: true, force: true });
+});
+
+test("pickCoverFile: own picture first, then a folder picture", async () => {
+  const { pickCoverFile } = await import("../src/covers.ts");
+  assert.equal(pickCoverFile("A - B.mp3", ["A - B.mp3", "folder.jpg", "A - B.JPG"]), "A - B.JPG");
+  assert.equal(pickCoverFile("A - B.mp3", ["A - B.mp3", "notes.txt", "Front.png"]), "Front.png");
+  assert.equal(pickCoverFile("A - B.mp3", ["A - B.mp3", "random.jpg", ".cover.jpg"]), null);
+});
+
+test("search results carry a cover URL served through the contract", async () => {
+  const res = await fetch(`${base}/api/get-music?q=hells%20bells`, { headers: auth });
+  const body = (await res.json()) as {
+    data: { tracks: { items: Array<{ album: { image: { thumbnail: string | null } } }> } };
+  };
+  const thumb = body.data.tracks.items[0]?.album.image.thumbnail;
+  assert.ok(thumb, "expected a thumbnail URL");
+  assert.ok(thumb.startsWith(`${base}/api/cover?track_id=`));
+
+  assert.equal((await fetch(thumb)).status, 401); // needs the secret like the rest
+  const img = await fetch(thumb, { headers: auth });
+  assert.equal(img.status, 200);
+  assert.match(img.headers.get("content-type") ?? "", /^image\//);
+  assert.ok((await img.arrayBuffer()).byteLength > 0);
+
+  // A track without any picture gets no URL and a 404 for its cover.
+  const other = await fetch(`${base}/api/get-music?q=beyonce`, { headers: auth });
+  const ob = (await other.json()) as {
+    data: { tracks: { items: Array<{ id: string; album: { image: { thumbnail: string | null } } }> } };
+  };
+  assert.equal(ob.data.tracks.items[0]?.album.image.thumbnail, null);
+  const none = await fetch(`${base}/api/cover?track_id=${ob.data.tracks.items[0]?.id}`, { headers: auth });
+  assert.equal(none.status, 404);
 });

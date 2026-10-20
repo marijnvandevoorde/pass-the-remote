@@ -4,6 +4,7 @@ import type { Config } from "./config.ts";
 import { Db } from "./db.ts";
 import { Scanner } from "./scanner.ts";
 import { makeRouter } from "./routes.ts";
+import { CoverCache } from "./covers.ts";
 
 /** Package version, served by /api/health and /api/status. */
 export const VERSION: string = (() => {
@@ -27,7 +28,13 @@ export function createApp(config: Config): {
   const db = new Db(config.dbPath);
   const scanner = new Scanner(db, config.musicDir);
   const server = http.createServer(
-    makeRouter({ db, config, scan: scanner.state, version: VERSION }),
+    makeRouter({
+      db,
+      config,
+      scan: scanner.state,
+      version: VERSION,
+      covers: new CoverCache(config.musicDir),
+    }),
   );
   return { db, scanner, server };
 }

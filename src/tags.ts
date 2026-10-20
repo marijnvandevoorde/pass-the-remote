@@ -12,6 +12,8 @@ export interface AudioTags {
   artist: string | null;
   album: string | null;
   durationSec: number | null;
+  /** The file carries a cover picture (an attached-picture stream). */
+  embeddedArt: boolean;
 }
 
 /** Returns parsed tags + duration, or `null` if ffprobe is missing /
@@ -36,6 +38,10 @@ export async function readTags(absPath: string): Promise<AudioTags | null> {
   const get = (k: string): string | null =>
     pickStr(tags[k]) ?? pickStr(streamTags[k]) ?? null;
   const durationRaw = Number(fmt["duration"]);
+  const embeddedArt = streams.some((s) => {
+    const st = obj(s);
+    return st["codec_type"] === "video" && obj(st["disposition"])["attached_pic"] === 1;
+  });
   return {
     title: get("title"),
     artist: get("artist") ?? get("album_artist"),
@@ -43,6 +49,7 @@ export async function readTags(absPath: string): Promise<AudioTags | null> {
     durationSec: Number.isFinite(durationRaw) && durationRaw > 0
       ? durationRaw
       : null,
+    embeddedArt,
   };
 }
 

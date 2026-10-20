@@ -7,12 +7,14 @@ import { extToMime } from "./mime.ts";
 import type { Db, Track } from "./db.ts";
 import type { Config } from "./config.ts";
 import type { ScanState } from "./scanner.ts";
+import { coverSource, type CoverCache } from "./covers.ts";
 
 export interface RouterDeps {
   db: Db;
   config: Config;
   scan: ScanState;
   version: string;
+  covers: CoverCache;
 }
 
 /** Error texts a Pass the Aux user sees verbatim in the app. */
@@ -28,7 +30,7 @@ type AuthResult = "ok" | keyof typeof AUTH_ERRORS;
 export function makeRouter(
   deps: RouterDeps,
 ): (req: IncomingMessage, res: ServerResponse) => void {
-  const { db, config, scan, version } = deps;
+  const { db, config, scan, version, covers } = deps;
   const secretDigest = digest(config.secret);
   const lastAuthLog = new Map<string, number>();
   return (req, res) => {
@@ -62,7 +64,14 @@ export function makeRouter(
         return;
       }
       if (method === "GET" && url.pathname === "/api/get-music") {
-        handleSearch(res, url, db, scan);
+        handleSearch(req, res, url, db, scan);
+        return;
+      }
+      if (method === "GET" && url.pathname === "/api/cover") {
+        void handleCover(res, url, db, covers).catch((e: unknown) => {
+          console.warn(`[cover] ${(e as Error).message}`);
+          if (!res.headersSent) sendJson(res, 500, { success: false, error: "server error" });
+        });
         return;
       }
       if (method === "GET" && url.pathname === "/api/stream-music") {
@@ -96,7 +105,13 @@ function checkAuth(req: IncomingMessage, expected: Buffer): AuthResult {
   return crypto.timingSafeEqual(got, expected) ? "ok" : "wrong";
 }
 
-function handleSearch(res: ServerResponse, url: URL, db: Db, scan: ScanState): void {
+function handleSearch(
+  req: IncomingMessage,
+  res: ServerResponse,
+  url: URL,
+  db: Db,
+  scan: ScanState,
+): void {
   const q = (url.searchParams.get("q") ?? "").trim();
   if (q === "") {
     sendJson(res, 400, { success: false, error: "missing search query (q)" });
@@ -112,7 +127,7 @@ function handleSearch(res: ServerResponse, url: URL, db: Db, scan: ScanState): v
     success: true,
     data: {
       tracks: {
-        items: items.map(toApiTrack),
+        items: items.map((t) => toApiTrack(t, publicOrigin(req))),
         total,
         offset,
         limit: 10,
@@ -123,7 +138,21 @@ function handleSearch(res: ServerResponse, url: URL, db: Db, scan: ScanState): v
   });
 }
 
-function toApiTrack(t: Track): Record<string, unknown> {
+/** The origin the client used to reach us, for absolute cover URLs. A
+ *  reverse proxy that terminates TLS should send X-Forwarded-Proto. */
+function publicOrigin(req: IncomingMessage): string {
+  const fwd = req.headers["x-forwarded-proto"];
+  const proto = (Array.isArray(fwd) ? fwd[0] : fwd)?.split(",")[0]?.trim();
+  return `${proto === "https" ? "https" : "http"}://${req.headers.host ?? "localhost"}`;
+}
+
+function toApiTrack(t: Track, origin: string): Record<string, unknown> {
+  // Covers need the same Bearer secret as everything else, so a client
+  // fetches them server-side (Pass the Aux proxies them to the browser).
+  const cover =
+    coverSource(t) === null
+      ? null
+      : `${origin}/api/cover?track_id=${encodeURIComponent(t.id)}`;
   return {
     id: t.id,
     title:
@@ -133,12 +162,37 @@ function toApiTrack(t: Track): Record<string, unknown> {
     performer: { name: t.artist ?? "Unknown Artist" },
     album: {
       title: t.album ?? "",
-      image: { thumbnail: null, small: null, large: null },
+      image: { thumbnail: cover, small: cover, large: null },
     },
     streamable: true,
     hires: false,
     parental_warning: false,
   };
+}
+
+async function handleCover(
+  res: ServerResponse,
+  url: URL,
+  db: Db,
+  covers: CoverCache,
+): Promise<void> {
+  const id = (url.searchParams.get("track_id") ?? "").trim();
+  if (id === "") {
+    sendJson(res, 400, { success: false, error: "missing track_id" });
+    return;
+  }
+  const row = db.getById(id);
+  const cover = row === null ? null : await covers.get(row);
+  if (cover === null) {
+    sendJson(res, 404, { success: false, error: "no cover for this track" });
+    return;
+  }
+  res.writeHead(200, {
+    "Content-Type": cover.mime,
+    "Content-Length": cover.data.length,
+    "Cache-Control": "private, max-age=86400",
+  });
+  res.end(res.req?.method === "HEAD" ? undefined : cover.data);
 }
 
 function handleStream(
