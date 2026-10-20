@@ -9,7 +9,7 @@ import os from "node:os";
 import path from "node:path";
 import type { AddressInfo } from "node:net";
 import { createApp } from "../src/app.ts";
-import { Db } from "../src/db.ts";
+import { Db, trackIdFor } from "../src/db.ts";
 import { normalize } from "../src/normalize.ts";
 import { parseRange } from "../src/routes.ts";
 import type { Config } from "../src/config.ts";
@@ -238,6 +238,9 @@ test("upgrading an old database fills search_text", () => {
   const row = upgraded.getById("1");
   assert.ok(row?.search_text?.includes("cafe"));
   assert.equal(row?.mtime_ms, null);
+  // The id moved to the relative-path scheme; the old one still resolves.
+  assert.equal(row?.id, trackIdFor("a.mp3"));
+  assert.equal(row?.legacy_id, "1");
   upgraded.close();
 });
 
@@ -265,4 +268,31 @@ test("parseFilename: filename artist beats a single folder, id folders ignored",
   assert.deepEqual(parseFilename("Radiohead/Creep.mp3"), {
     title: "Creep", artist: "Radiohead", album: null,
   });
+});
+
+test("track ids survive moving the music folder", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "ptr-move-"));
+  const before = path.join(root, "native-music");
+  const after = path.join(root, "docker-music");
+  fs.mkdirSync(path.join(before, "Artist"), { recursive: true });
+  fs.writeFileSync(path.join(before, "Artist", "Artist - Song.mp3"), Buffer.alloc(300, 1));
+  const cfg = (musicDir: string): Config => ({
+    host: "127.0.0.1", port: 0, musicDir, dbPath: path.join(root, "library.db"),
+    secret: SECRET, scanIntervalS: 0,
+  });
+  const a = createApp(cfg(before));
+  await a.scanner.scan();
+  const id = trackIdFor(path.join("Artist", "Artist - Song.mp3"));
+  assert.equal(a.db.getById(id)?.abs_path, path.join(before, "Artist", "Artist - Song.mp3"));
+  a.db.close();
+
+  fs.renameSync(before, after);
+  const b = createApp(cfg(after));
+  const r = await b.scanner.scan();
+  assert.equal(r.probed, 0); // unchanged files aren't re-read after a move
+  assert.equal(r.removed, 0);
+  assert.equal(b.db.count(), 1);
+  assert.equal(b.db.getById(id)?.abs_path, path.join(after, "Artist", "Artist - Song.mp3"));
+  b.db.close();
+  fs.rmSync(root, { recursive: true, force: true });
 });
