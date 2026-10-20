@@ -29,7 +29,8 @@ user has configured.
 ## Commands
 
 ```bash
-npm run typecheck   # tsc --noEmit
+npm run typecheck   # tsc --noEmit (src + test)
+npm test            # node:test, end to end over HTTP on a temp folder
 node src/server.ts  # run directly (Node strips .ts at runtime)
 docker compose up -d
 ```
@@ -40,15 +41,30 @@ All routes require `Authorization: Bearer <REMOTE_SECRET>` except `/api/health`.
 
 ```
 GET /api/get-music?q=<query>&offset=<n>
-GET /api/stream-music?track_id=<id>
-GET /api/health
+GET|HEAD /api/stream-music?track_id=<id>
+GET /api/status        # tracks, scan state, last error
+GET /api/health        # unauthenticated
 ```
+
+Error messages are shown verbatim in Pass the Aux, so write them for the
+user ("wrong secret: it must match REMOTE_SECRET …"). Additive fields only:
+Pass the Aux and other clients parse this contract.
 
 `get-music` returns
 `{ success, data: { tracks: { items, total, offset, limit } } }` with the
-same per-track shape the Pass the Aux client adapter expects.
+same per-track shape the Pass the Aux client adapter expects, plus
+`data.library: { tracks, scanning }`.
 `stream-music` streams the audio bytes with `Content-Type` and
 `Accept-Ranges: bytes`.
+
+## Index
+
+`src/scanner.ts` skips files whose size and mtime are unchanged, follows
+symlinks, and doesn't prune when a folder was unreadable or the music
+folder is empty. Search matches `search_text` (normalised artist, title,
+album, filename; `src/normalize.ts`) and ranks in `src/search.ts`. When
+what the scanner derives from a file changes, bump `INDEX_VERSION` in
+`src/db.ts` so every file is re-read once.
 
 ## Code conventions
 

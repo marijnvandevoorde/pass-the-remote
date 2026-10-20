@@ -1,9 +1,6 @@
-import http from "node:http";
 import { loadConfig } from "./config.ts";
-import { Db } from "./db.ts";
-import { Scanner } from "./scanner.ts";
+import { createApp, VERSION } from "./app.ts";
 import { Watcher } from "./watcher.ts";
-import { makeRouter } from "./routes.ts";
 
 function tryLoadEnv(): void {
   try {
@@ -15,9 +12,14 @@ function tryLoadEnv(): void {
 
 export function start(): void {
   tryLoadEnv();
-  const config = loadConfig(process.env);
-  const db = new Db(config.dbPath);
-  const scanner = new Scanner(db, config.musicDir);
+  let config;
+  try {
+    config = loadConfig(process.env);
+  } catch (e) {
+    console.error(`Pass the Remote can't start: ${(e as Error).message}`);
+    process.exit(1);
+  }
+  const { db, scanner, server } = createApp(config);
   const watcher = new Watcher(config.musicDir, scanner);
 
   // Boot fast: kick the initial scan off in the background.
@@ -32,10 +34,17 @@ export function start(): void {
     }, config.scanIntervalS * 1000).unref();
   }
 
-  const server = http.createServer(makeRouter({ db, config }));
+  server.on("error", (e: NodeJS.ErrnoException) => {
+    console.error(
+      e.code === "EADDRINUSE"
+        ? `Port ${config.port} is already in use: set PORT to a free one.`
+        : `Server error: ${e.message}`,
+    );
+    process.exit(1);
+  });
   server.listen(config.port, config.host, () => {
     console.log(
-      `Pass the Remote listening on ${config.host}:${config.port}`,
+      `Pass the Remote ${VERSION} listening on ${config.host}:${config.port}`,
     );
     console.log(`  music: ${config.musicDir}`);
     console.log(`  db:    ${config.dbPath}`);
