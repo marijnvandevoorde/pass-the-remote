@@ -42,6 +42,7 @@ All routes require `Authorization: Bearer <REMOTE_SECRET>` except `/api/health`.
 ```
 GET /api/get-music?q=<query>&offset=<n>
 GET|HEAD /api/stream-music?track_id=<id>
+GET /api/cover?track_id=<id>   # cover thumbnail (ffmpeg), URL in album.image.thumbnail
 GET /api/status        # tracks, scan state, last error
 GET /api/health        # unauthenticated
 ```

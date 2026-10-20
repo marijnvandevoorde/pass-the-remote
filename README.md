@@ -133,7 +133,8 @@ a word in the title or artist.
           "version": null,
           "duration": 320,
           "performer": { "name": "Daft Punk" },
-          "album":     { "title": "Discovery", "image": { "thumbnail": null } },
+          "album":     { "title": "Discovery", "image": {
+            "thumbnail": "http://<host>:3000/api/cover?track_id=9a2b…" } },
           "streamable": true
         }
       ],
@@ -147,6 +148,19 @@ a word in the title or artist.
 ```
 
 `library.scanning` is true while a scan runs (results may be incomplete).
+`album.image.thumbnail` (and `small`) is a cover URL when the track has one,
+else `null`; it needs the same Bearer secret.
+
+### `GET /api/cover?track_id=<id>`
+
+A JPEG thumbnail (at most 300 px wide) of the track's cover: a picture with
+the same name next to the file (`Song.mp3` + `Song.jpg`), else the art
+embedded in the file, else a folder picture (`cover`, `folder`, `front` or
+`album` `.jpg/.jpeg/.png/.webp`). `404` when there is none. Thumbnails are
+made with `ffmpeg` (in the Docker image); without it a picture file is sent
+as is and embedded art isn't available. Cover URLs use the `Host` the
+client connected to; behind a TLS-terminating proxy, send
+`X-Forwarded-Proto: https`.
 
 ### `GET /api/stream-music?track_id=<id>`
 

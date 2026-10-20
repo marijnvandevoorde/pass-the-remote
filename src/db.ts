@@ -24,6 +24,11 @@ export interface Track {
   mtime_ms: number | null;
   /** Normalised artist/title/album/filename (see normalize.ts). */
   search_text: string | null;
+  /** A picture next to the track or in its folder, relative to the
+   *  music folder; null when there is none. */
+  cover_path: string | null;
+  /** 1 when the file has embedded cover art. */
+  embedded_art: number | null;
 }
 
 const SCHEMA = `
@@ -49,6 +54,8 @@ const ADDED_COLUMNS: ReadonlyArray<[string, string]> = [
   ["mtime_ms", "INTEGER"],
   ["search_text", "TEXT"],
   ["legacy_id", "TEXT"],
+  ["cover_path", "TEXT"],
+  ["embedded_art", "INTEGER"],
 ];
 
 /** A track's id: md5 of its path relative to the music folder, with `/`
@@ -66,7 +73,7 @@ export function legacyIdFor(absPath: string): string {
 
 /** Bump when what the scanner derives from a file changes (tag handling,
  *  filename heuristic, search form): every file is re-read once. */
-const INDEX_VERSION = 2;
+const INDEX_VERSION = 3;
 
 export interface FileState {
   id: string;
@@ -109,8 +116,8 @@ export class Db {
       this.handle.exec(`PRAGMA user_version = ${INDEX_VERSION}`);
     }
     this.#upsert = this.handle.prepare(`
-      INSERT INTO tracks (id, abs_path, rel_path, title, artist, album, duration_sec, size_bytes, ext, indexed_at, mtime_ms, search_text, legacy_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO tracks (id, abs_path, rel_path, title, artist, album, duration_sec, size_bytes, ext, indexed_at, mtime_ms, search_text, legacy_id, cover_path, embedded_art)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         abs_path     = excluded.abs_path,
         legacy_id    = excluded.legacy_id,
@@ -123,13 +130,15 @@ export class Db {
         ext          = excluded.ext,
         indexed_at   = excluded.indexed_at,
         mtime_ms     = excluded.mtime_ms,
-        search_text  = excluded.search_text
+        search_text  = excluded.search_text,
+        cover_path   = excluded.cover_path,
+        embedded_art = excluded.embedded_art
     `);
     this.#getById = this.handle.prepare("SELECT * FROM tracks WHERE id = ?");
     this.#getByLegacyId = this.handle.prepare("SELECT * FROM tracks WHERE legacy_id = ? LIMIT 1");
     this.#prune = this.handle.prepare("DELETE FROM tracks WHERE indexed_at < ?");
     this.#touch = this.handle.prepare(
-      "UPDATE tracks SET indexed_at = ?, abs_path = ?, legacy_id = ? WHERE id = ?",
+      "UPDATE tracks SET indexed_at = ?, abs_path = ?, legacy_id = ?, cover_path = ? WHERE id = ?",
     );
     this.#count = this.handle.prepare("SELECT COUNT(*) AS n FROM tracks");
   }
@@ -182,6 +191,8 @@ export class Db {
       t.mtime_ms,
       t.search_text,
       t.legacy_id,
+      t.cover_path,
+      t.embedded_art,
     );
   }
 
@@ -201,9 +212,10 @@ export class Db {
   }
 
   /** Mark an unchanged file as seen by the current scan (its absolute
-   *  path changes when the music folder moved). */
-  touch(id: string, indexedAt: number, absPath: string): void {
-    this.#touch.run(indexedAt, absPath, legacyIdFor(absPath), id);
+   *  path changes when the music folder moved; a folder picture can be
+   *  added or removed without touching the audio file). */
+  touch(id: string, indexedAt: number, absPath: string, coverPath: string | null): void {
+    this.#touch.run(indexedAt, absPath, legacyIdFor(absPath), coverPath, id);
   }
 
   count(): number {
