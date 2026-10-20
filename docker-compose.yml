@@ -14,6 +14,9 @@ services:
     build: .
     image: pass-the-remote
     container_name: pass-the-remote
+    # Runs unprivileged. Must be able to write ./data and read your music:
+    # set PUID/PGID in .env to the owner of ./data (`id -u` / `id -g`).
+    user: "${PUID:-1000}:${PGID:-1000}"
     ports:
       - "${PORT:-3000}:3000"
     environment:
