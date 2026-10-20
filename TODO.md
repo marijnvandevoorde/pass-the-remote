@@ -8,4 +8,3 @@
   in search, and unwrap `fetch failed` into the real cause (connection refused, unknown host).
 - Track ids are `md5(absolute path)`: moving `MUSIC_DIR` (native → Docker) changes every id.
   Harmless for Pass the Aux (imports copy the file), but a stable id (relative path) would be nicer.
-- The container runs as root; add a non-root user if it is ever exposed beyond a home network.

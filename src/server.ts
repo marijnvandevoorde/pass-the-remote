@@ -19,7 +19,22 @@ export function start(): void {
     console.error(`Pass the Remote can't start: ${(e as Error).message}`);
     process.exit(1);
   }
-  const { db, scanner, server } = createApp(config);
+  let app;
+  try {
+    app = createApp(config);
+  } catch (e) {
+    const code = (e as NodeJS.ErrnoException).code ?? "";
+    const denied = code === "EACCES" || code === "EPERM" || /unable to open|readonly/i.test((e as Error).message);
+    console.error(
+      denied
+        ? `Pass the Remote can't write its index at ${config.dbPath}: ${(e as Error).message}. ` +
+          `It runs as uid ${process.getuid?.() ?? "?"}; make the folder writable for that user ` +
+          `(e.g. \`sudo chown -R ${process.getuid?.() ?? 1000}:${process.getgid?.() ?? 1000} ./data\`) or set PUID/PGID to its owner.`
+        : `Pass the Remote can't open its index at ${config.dbPath}: ${(e as Error).message}`,
+    );
+    process.exit(1);
+  }
+  const { db, scanner, server } = app;
   const watcher = new Watcher(config.musicDir, scanner);
 
   // Boot fast: kick the initial scan off in the background.

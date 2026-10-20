@@ -25,6 +25,20 @@ docker compose up -d
 The server is now on `http://localhost:3000` (or whatever `PORT` you set).
 The SQLite index lives in `./data/`; the music folder is mounted read-only.
 
+The container runs as an unprivileged user (uid/gid 1000 by default), not
+root. That user must be able to write `./data` and read your music folder:
+
+- Create `./data` yourself before the first `docker compose up` (a folder
+  Docker creates for you belongs to root), and make sure it belongs to uid
+  1000 (`sudo chown -R 1000:1000 data`), **or** set `PUID`/`PGID` in `.env`
+  to its owner (`id -u`, `id -g`).
+- The music only needs to be readable for that user (most folders are
+  world-readable already).
+- Upgrading from an image that ran as root: the existing `./data` is owned
+  by root, so `chown` it once as above.
+
+If the index folder isn't writable, the server says so at startup and exits.
+
 ### Locally (no Docker)
 
 ```bash
@@ -88,6 +102,7 @@ attempts.
 | `DB_PATH`        | `./library.db` | SQLite index location. Native only.                  |
 | `HOST`           | `0.0.0.0`      | Bind host. Native only.                              |
 | `PORT`           | `3000`         | Bind port (host port under Docker).                  |
+| `PUID` / `PGID`  | `1000`         | User/group the container runs as. Docker only.       |
 | `SCAN_INTERVAL_S`| `300`          | Re-scan interval in seconds. `0` disables rescans.   |
 
 ## API

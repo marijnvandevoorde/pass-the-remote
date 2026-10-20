@@ -17,6 +17,15 @@ ENV PORT=3000
 ENV MUSIC_DIR=/music
 ENV DB_PATH=/data/library.db
 
+# Run as the image's unprivileged `node` user (uid/gid 1000), not root.
+# /data must be writable by it: an empty named volume inherits this
+# ownership; a bind-mounted host folder must be owned by uid 1000 (or run
+# the container with `user:` set to the folder's owner, see
+# docker-compose.yml). /music only needs to be readable.
+RUN mkdir -p /music /data && chown node:node /data
+
+USER node
+
 VOLUME ["/music", "/data"]
 EXPOSE 3000
 
