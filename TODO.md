@@ -6,5 +6,3 @@
 - Pass the Aux side (in the pass-the-aux repo): call `GET /api/status` from a "test connection"
   button in Settings → Remote record stores, show `data.library.scanning` as "still indexing"
   in search, and unwrap `fetch failed` into the real cause (connection refused, unknown host).
-- Track ids are `md5(absolute path)`: moving `MUSIC_DIR` (native → Docker) changes every id.
-  Harmless for Pass the Aux (imports copy the file), but a stable id (relative path) would be nicer.

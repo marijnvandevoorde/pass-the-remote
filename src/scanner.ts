@@ -1,8 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import crypto from "node:crypto";
 import { AUDIO_EXTS } from "./mime.ts";
-import { Db } from "./db.ts";
+import { Db, legacyIdFor, trackIdFor } from "./db.ts";
 import { readTags } from "./tags.ts";
 import { searchText } from "./normalize.ts";
 
@@ -98,20 +97,20 @@ export class Scanner {
         try {
           const stat = await fs.stat(file);
           if (!stat.isFile()) continue;
-          const id = crypto.createHash("md5").update(file).digest("hex");
+          const rel = path.relative(this.#root, file);
+          const id = trackIdFor(rel);
           const mtime = Math.floor(stat.mtimeMs);
-          const prev = known.get(file);
+          const prev = known.get(id);
           if (
             prev !== undefined &&
             prev.mtime_ms === mtime &&
             prev.size_bytes === stat.size &&
             prev.search_text !== null
           ) {
-            this.#db.touch(prev.id, startedAt);
+            this.#db.touch(prev.id, startedAt, file);
             seen++;
             continue;
           }
-          const rel = path.relative(this.#root, file);
           // Real tags first (ID3 / Vorbis / MP4 / etc. via ffprobe),
           // falling back to the filename/path heuristic field-by-field
           // so a tagged title still beats a folder-derived artist.
@@ -123,6 +122,7 @@ export class Scanner {
           const album = tags?.album ?? fallback.album;
           this.#db.upsert({
             id,
+            legacy_id: legacyIdFor(file),
             abs_path: file,
             rel_path: rel,
             title,

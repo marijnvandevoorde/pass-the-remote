@@ -180,8 +180,11 @@ the secret is missing, malformed or wrong.
 ## How the index works
 
 On boot, every file under `MUSIC_DIR` with a known audio extension
-(mp3, flac, m4a, mp4, aac, ogg, opus, wav) is hashed
-(`md5(absolute_path)`) and inserted into a SQLite table. Symlinked files
+(mp3, flac, m4a, mp4, aac, ogg, opus, wav) is inserted into a SQLite
+table. A track's id is `md5` of its path relative to `MUSIC_DIR`, so moving
+or remounting the music folder (say from a native run to Docker) keeps every
+id and doesn't re-read any file. Ids from before 0.3.0 (`md5` of the
+absolute path) still work for `stream-music`. Symlinked files
 and folders are followed. Title, artist, album and duration come from the
 file's tags (read with `ffprobe`); for files without tags they are parsed
 from the path: `Artist/Album/01 - Title.mp3`, or `Artist - Title.mp3` in
