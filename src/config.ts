@@ -25,7 +25,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const secret = (env.REMOTE_SECRET ?? "").trim();
   if (secret === "") {
     throw new Error(
-      "REMOTE_SECRET is required (set it in .env or the environment).",
+      "REMOTE_SECRET is required: set it in .env or the environment (generate one with `openssl rand -hex 32`).",
     );
   }
   return Object.freeze({
