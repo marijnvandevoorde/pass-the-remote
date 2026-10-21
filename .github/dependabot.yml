@@ -21,6 +21,8 @@ updates:
         update-types:
           - "minor"
           - "patch"
+    cooldown:
+      default-days: 3
 
   # Base images in Dockerfile and docker-compose.yml at the repo root.
   - package-ecosystem: "docker"
@@ -35,6 +37,8 @@ updates:
         update-types:
           - "minor"
           - "patch"
+    cooldown:
+      default-days: 3
 
   # Actions used by the workflows in .github/workflows/.
   # Grouped too: action minor/patch bumps are routine and should land on their own.
@@ -50,3 +54,5 @@ updates:
         update-types:
           - "minor"
           - "patch"
+    cooldown:
+      default-days: 3
