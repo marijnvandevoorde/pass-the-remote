@@ -6,6 +6,9 @@ name: CI
 # that stays manual (docker-publish.yml).
 on:
   pull_request:
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
   workflow_dispatch:
 
 permissions:
